@@ -12,8 +12,7 @@ const soundsMap = new Map([
     ["boum-boum","drum"]
 ]);
 
-let map = new Map();
-let timeMap = new Map();
+var musiciens = [];
 
 s.bind(protocol.PROTOCOL_PORT, function() {
   console.log("Joining multicast group");
@@ -23,20 +22,15 @@ s.bind(protocol.PROTOCOL_PORT, function() {
 s.on('message', function(msg, source) {
 
     const jmessage = JSON.parse(msg);
-    const uuid = jmessage['id'];
-    const instrument = soundsMap.get(jmessage['sound']);
-	const timestamp = jmessage['timestamp'];
+    const uuid = jmessage.uuid;
+    const instrument = soundsMap.get(jmessage.sound);
+	const timestamp = jmessage.timestamp;
 	
-    const json = {
+    musiciens.push({
         uuid: uuid,
         instrument: instrument,
-        activeSince: timestamp
-    };
-
-    if(!map.has(uuid))
-        map.set(uuid,json);
-
-    timeMap.set(uuid,Date.now());
+        activeSince: timestamp,
+    });
 
 	console.log("Data has arrived: " + uuid + "  " + instrument + ". Source port: " + source.port);
 });
@@ -46,19 +40,20 @@ const net = require('net');
 const server = net.createServer(function (socket) {
     const json = [];
 
-    map.forEach(function (sound, pos) {
-        const start = timeMap.get(pos);
-        const end = Date.now();
+    for (var i = 0; i < musiciens.length; i++) {
 
-        if (end - start < TIMEOUT) 
-        {
-            json.push(sound);
+        if (Date.now() - musiciens[i].activeSince <= MAX_DELAY) {
+            json.push({
+                uuid: musiciens[i].uuid,
+                instrument: musiciens[i].instrument,
+                activeSince: new Date(musiciens[i].activeSince),
+            });
         }
-    });
+    }
     
-    const readJSON = JSON.stringify(json, null, 2);
+    const payload = JSON.stringify(json);
 
-    socket.write(jsonPretty);
+    socket.write(payload);
     socket.pipe(socket);
     socket.end();
 });
